@@ -1,0 +1,17 @@
+package: github.com/HcashOrg/hcashutil
+import:
+- package: github.com/HcashOrg/hcashd
+  subpackages:
+  - blockchain
+  - chaincfg
+  - chaincfg/chainec
+  - chaincfg/chainhash
+  - txscript
+  - wire
+- package: golang.org/x/crypto
+  subpackages:
+  - ripemd160
+testImport:
+- package: github.com/davecgh/go-spew
+  subpackages:
+  - spew

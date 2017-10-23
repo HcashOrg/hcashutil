@@ -336,6 +336,8 @@ func NewBlockDeepCopyCoinbase(msgBlock *wire.MsgBlock) *Block {
 	// Deep copy the first transaction. Also change the coinbase pointer.
 	msgBlockCopy.Transactions[0] =
 		NewTxDeep(msgBlockCopy.Transactions[0]).MsgTx()
+	msgBlockCopy.Transactions[1] =
+		NewTxDeep(msgBlockCopy.Transactions[1]).MsgTx()
 
 	bl := &Block{
 		msgBlock: msgBlockCopy,

@@ -16,7 +16,7 @@ import (
 	"github.com/HcashOrg/hcashutil/base58"
 	"github.com/HcashOrg/hcashd/crypto"
 	"github.com/HcashOrg/hcashd/crypto/bliss"
-	"github.com/HcashOrg/hcashd/crypto/mss"
+	"github.com/HcashOrg/hcashd/crypto/lms"
 )
 
 var (
@@ -67,8 +67,8 @@ func encodePKAddress(serializedPK []byte, netID [2]byte, algo int) string {
 		pubKeyBytes[0] = byte(chainec.ECTypeSecSchnorr)
 	case bliss.BSTypeBliss:
 		pubKeyBytes[0] = byte(bliss.BSTypeBliss)
-	case mss.MSSTypeMSS:
-		pubKeyBytes[0] = byte(mss.MSSTypeMSS)
+	case lms.LMSTypeLMS:
+		pubKeyBytes[0] = byte(lms.LMSTypeLMS)
 	}
 
 	// Pubkeys are encoded as [0] = type/ybit, [1:33] = serialized pubkey
@@ -195,8 +195,8 @@ func DecodeAddress(addr string) (Address, error) {
 	case net.PKHBlissAddrID:
 		return NewAddressPubKeyHash(decoded, net, bliss.BSTypeBliss)
 
-	case net.PKHMssAddrID:
-		return NewAddressPubKeyHash(decoded, net, mss.MSSTypeMSS)
+	case net.PKHLmsAddrID:
+		return NewAddressPubKeyHash(decoded, net, lms.LMSTypeLMS)
 
 	case net.ScriptHashAddrID:
 		return NewAddressScriptHashFromHash(decoded, net)
@@ -248,8 +248,8 @@ func NewAddressPubKeyHash(pkHash []byte, net *chaincfg.Params,
 		addrID = net.PKHSchnorrAddrID
 	case bliss.BSTypeBliss:
 		addrID = net.PKHBlissAddrID
-	case mss.MSSTypeMSS:
-		addrID = net.PKHMssAddrID
+	case lms.LMSTypeLMS:
+		addrID = net.PKHLmsAddrID
 	default:
 		return nil, errors.New("unknown signature algorithm")
 	}
@@ -296,7 +296,7 @@ func (a *AddressPubKeyHash) IsForNet(net *chaincfg.Params) bool {
 		a.netID == net.PKHEdwardsAddrID ||
 		a.netID == net.PKHSchnorrAddrID ||
 		a.netID == net.PKHBlissAddrID ||
-		a.netID == net.PKHMssAddrID
+		a.netID == net.PKHLmsAddrID
 }
 
 // String returns a human-readable string for the pay-to-pubkey-hash address.
@@ -325,8 +325,8 @@ func (a *AddressPubKeyHash) DSA(net *chaincfg.Params) int {
 		return chainec.ECTypeSecSchnorr
 	case net.PKHBlissAddrID:
 		return bliss.BSTypeBliss
-	case net.PKHMssAddrID:
-		return mss.MSSTypeMSS
+	case net.PKHLmsAddrID:
+		return lms.LMSTypeLMS
 	}
 	return -1
 }
@@ -869,29 +869,29 @@ func (a *AddressBlissPubKey) Net() *chaincfg.Params {
 
 // AddressSecSchnorrPubKey is an Address for a secp256k1 pay-to-pubkey
 // transaction.
-type AddressMssPubKey struct {
+type AddressLmsPubKey struct {
 	net          *chaincfg.Params
 	pubKey       crypto.PublicKey
 	pubKeyHashID [2]byte
 }
 
-func NewAddressMssPubKey(serializedPubKey []byte,
-	net *chaincfg.Params) (*AddressMssPubKey, error) {
-	pubKey, err := mss.MSS.ParsePubKey(serializedPubKey)
+func NewAddressLmsPubKey(serializedPubKey []byte,
+	net *chaincfg.Params) (*AddressLmsPubKey, error) {
+	pubKey, err := lms.LMS.ParsePubKey(serializedPubKey)
 	if err != nil {
 		return nil, err
 	}
 
-	return &AddressMssPubKey{
+	return &AddressLmsPubKey{
 		net:          net,
 		pubKey:       pubKey,
-		pubKeyHashID: net.PKHMssAddrID,
+		pubKeyHashID: net.PKHLmsAddrID,
 	}, nil
 }
 
 // serialize returns the serialization of the public key according to the
 // format associated with the address.
-func (a *AddressMssPubKey) serialize() []byte {
+func (a *AddressLmsPubKey) serialize() []byte {
 	return a.pubKey.Serialize()
 }
 
@@ -903,21 +903,21 @@ func (a *AddressMssPubKey) serialize() []byte {
 // are pay-to-pubkey-hash constructed from the uncompressed public key.
 //
 // Part of the Address interface.
-func (a *AddressMssPubKey) EncodeAddress() string {
+func (a *AddressLmsPubKey) EncodeAddress() string {
 	return encodeAddress(Hash160(a.serialize()), a.pubKeyHashID)
 }
 
 // ScriptAddress returns the bytes to be included in a txout script to pay
 // to a public key.  Setting the public key format will affect the output of
 // this function accordingly.  Part of the Address interface.
-func (a *AddressMssPubKey) ScriptAddress() []byte {
+func (a *AddressLmsPubKey) ScriptAddress() []byte {
 	return a.serialize()
 }
 
 // Hash160 returns the underlying array of the pubkey hash.  This can be useful
 // when an array is more appropiate than a slice (for example, when used as map
 // keys).
-func (a *AddressMssPubKey) Hash160() *[ripemd160.Size]byte {
+func (a *AddressLmsPubKey) Hash160() *[ripemd160.Size]byte {
 	h160 := Hash160(a.pubKey.Serialize())
 	array := new([ripemd160.Size]byte)
 	copy(array[:], h160)
@@ -927,20 +927,20 @@ func (a *AddressMssPubKey) Hash160() *[ripemd160.Size]byte {
 
 // IsForNet returns whether or not the pay-to-pubkey address is associated
 // with the passed network.
-func (a *AddressMssPubKey) IsForNet(net *chaincfg.Params) bool {
-	return a.pubKeyHashID == net.PKHMssAddrID
+func (a *AddressLmsPubKey) IsForNet(net *chaincfg.Params) bool {
+	return a.pubKeyHashID == net.PKHLmsAddrID
 }
 
 // String returns the hex-encoded human-readable string for the pay-to-pubkey
 // address.  This is not the same as calling EncodeAddress.
-func (a *AddressMssPubKey) String() string {
-	return encodePKAddress(a.serialize(), a.net.PubKeyMssAddrID,
-		mss.MSSTypeMSS)
+func (a *AddressLmsPubKey) String() string {
+	return encodePKAddress(a.serialize(), a.net.PubKeyLmsAddrID,
+		lms.LMSTypeLMS)
 }
 
 // AddressPubKeyHash returns the pay-to-pubkey address converted to a
 // pay-to-pubkey-hash address.
-func (a *AddressMssPubKey) AddressPubKeyHash() *AddressPubKeyHash {
+func (a *AddressLmsPubKey) AddressPubKeyHash() *AddressPubKeyHash {
 	addr := &AddressPubKeyHash{net: a.net, netID: a.pubKeyHashID}
 	copy(addr.hash[:], Hash160(a.serialize()))
 	return addr
@@ -948,12 +948,12 @@ func (a *AddressMssPubKey) AddressPubKeyHash() *AddressPubKeyHash {
 
 // DSA returns the underlying digital signature algorithm for the
 // address.
-func (a *AddressMssPubKey) DSA(net *chaincfg.Params) int {
-	return mss.MSSTypeMSS
+func (a *AddressLmsPubKey) DSA(net *chaincfg.Params) int {
+	return lms.LMSTypeLMS
 }
 
 // Net returns the network for the address.
-func (a *AddressMssPubKey) Net() *chaincfg.Params {
+func (a *AddressLmsPubKey) Net() *chaincfg.Params {
 	return a.net
 }
 

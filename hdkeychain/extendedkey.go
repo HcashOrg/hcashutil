@@ -10,6 +10,7 @@ package hdkeychain
 //   https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki
 
 import (
+	"strings"
 	"bytes"
 	"crypto/hmac"
 	"crypto/rand"
@@ -243,6 +244,9 @@ func (k *ExtendedKey) Child(i uint32) (*ExtendedKey, error) {
 			return nil, err
 		}
 		privKey ,err := bliss.GeneratePrivateKey(1, entropy)
+		if err!= nil && strings.Contains(err.Error(),"invertible polynomial"){
+			return nil, ErrInvalidChild
+		}
 		if err != nil{
 			return nil, err
 		}

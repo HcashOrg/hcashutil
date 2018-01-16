@@ -167,6 +167,7 @@ func NewTxDeepTxIns(msgTx *wire.MsgTx) *Tx {
 	for _, txIn := range msgTx.TxIn {
 		sigScrLen := len(txIn.SignatureScript)
 		sigScrCopy := make([]byte, sigScrLen, sigScrLen)
+		copy(sigSrcCopy, txIn.SignatureScript)
 
 		txInCopy := new(wire.TxIn)
 		txInCopy.PreviousOutPoint.Hash = txIn.PreviousOutPoint.Hash
@@ -180,7 +181,7 @@ func NewTxDeepTxIns(msgTx *wire.MsgTx) *Tx {
 
 		txInCopy.SignatureScript = sigScrCopy
 
-		newMsgTx.AddTxIn(txIn)
+		newMsgTx.AddTxIn(txInCopy)
 	}
 
 	// Shallow copy the TxOuts.
@@ -190,7 +191,7 @@ func NewTxDeepTxIns(msgTx *wire.MsgTx) *Tx {
 
 	return &Tx{
 		hash:    msgTx.TxHash(),
-		msgTx:   msgTx,
+		msgTx:   newMsgTx,
 		txTree:  wire.TxTreeUnknown,
 		txIndex: TxIndexUnknown,
 	}

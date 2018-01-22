@@ -167,7 +167,7 @@ func NewTxDeepTxIns(msgTx *wire.MsgTx) *Tx {
 	for _, txIn := range msgTx.TxIn {
 		sigScrLen := len(txIn.SignatureScript)
 		sigScrCopy := make([]byte, sigScrLen, sigScrLen)
-		copy(sigSrcCopy, txIn.SignatureScript)
+		copy(sigScrCopy, txIn.SignatureScript)
 
 		txInCopy := new(wire.TxIn)
 		txInCopy.PreviousOutPoint.Hash = txIn.PreviousOutPoint.Hash

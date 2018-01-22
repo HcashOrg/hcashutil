@@ -13,6 +13,8 @@ import (
 	"github.com/HcashOrg/hcashd/chaincfg/chainec"
 	"github.com/HcashOrg/hcashd/chaincfg/chainhash"
 	"github.com/HcashOrg/hcashutil/base58"
+	"github.com/HcashOrg/hcashd/crypto/bliss"
+	//"fmt"
 )
 
 // ErrMalformedPrivateKey describes an error where a WIF-encoded private
@@ -28,8 +30,8 @@ var ErrMalformedPrivateKey = errors.New("malformed private key")
 // structure by calling DecodeWIF or created with a user-provided private key
 // by calling NewWIF.
 type WIF struct {
-	// ecType is the type of ECDSA used.
-	ecType int
+	// AlgorithmType is the type of Algorithm used.
+	AlgorithmType int
 
 	// PrivKey is the private key being imported or exported.
 	PrivKey chainec.PrivateKey
@@ -43,12 +45,12 @@ type WIF struct {
 // as a string encoded in the Wallet Import Format.  The compress argument
 // specifies whether the address intended to be imported or exported was created
 // by serializing the public key compressed rather than uncompressed.
-func NewWIF(privKey chainec.PrivateKey, net *chaincfg.Params, ecType int) (*WIF,
+func NewWIF(privKey chainec.PrivateKey, net *chaincfg.Params, algoType int) (*WIF,
 	error) {
 	if net == nil {
 		return nil, errors.New("no network")
 	}
-	return &WIF{ecType, privKey, net.PrivateKeyID}, nil
+	return &WIF{algoType, privKey, net.PrivateKeyID}, nil
 }
 
 // IsForNet returns whether or not the decoded WIF structure is associated
@@ -64,8 +66,8 @@ func (w *WIF) IsForNet(net *chaincfg.Params) bool {
 // sequence:
 //
 //  * 2 bytes to identify the network, must be 0x80 for mainnet or 0xef for testnet
-//  * 1 byte for ECDSA type
-//  * 32 bytes of a binary-encoded, big-endian, zero-padded private key
+//  * 1 byte for Algorithm type
+//  *  a binary-encoded, big-endian, zero-padded private key(32 bytes for ecdsa, 385 bytes for bliss)
 //  * 4 bytes of checksum, must equal the first four bytes of the double SHA256
 //    of every byte before the checksum in this sequence
 //
@@ -77,7 +79,11 @@ func DecodeWIF(wif string) (*WIF, error) {
 	decoded := base58.Decode(wif)
 	decodedLen := len(decoded)
 
-	if decodedLen != 39 {
+/*	fmt.Printf("%x\n", decoded)
+	fmt.Println("PriLen:",decodedLen)*/
+	//200 is for bliss v0
+	//392 is for bliss v1
+	if decodedLen != 39 && decodedLen != 392{
 		return nil, ErrMalformedPrivateKey
 	}
 
@@ -92,23 +98,27 @@ func DecodeWIF(wif string) (*WIF, error) {
 	netID := [2]byte{decoded[0], decoded[1]}
 	var privKey chainec.PrivateKey
 
-	ecType := 0
+	algType := 0
 	switch int(decoded[2]) {
 	case chainec.ECTypeSecp256k1:
 		privKeyBytes := decoded[3 : 3+chainec.Secp256k1.PrivKeyBytesLen()]
 		privKey, _ = chainec.Secp256k1.PrivKeyFromScalar(privKeyBytes)
-		ecType = chainec.ECTypeSecp256k1
+		algType = chainec.ECTypeSecp256k1
 	case chainec.ECTypeEdwards:
 		privKeyBytes := decoded[3 : 3+32]
 		privKey, _ = chainec.Edwards.PrivKeyFromScalar(privKeyBytes)
-		ecType = chainec.ECTypeEdwards
+		algType = chainec.ECTypeEdwards
 	case chainec.ECTypeSecSchnorr:
 		privKeyBytes := decoded[3 : 3+chainec.SecSchnorr.PrivKeyBytesLen()]
 		privKey, _ = chainec.SecSchnorr.PrivKeyFromScalar(privKeyBytes)
-		ecType = chainec.ECTypeSecSchnorr
+		algType = chainec.ECTypeSecSchnorr
+	case bliss.BSTypeBliss:
+		privKeyBytes := decoded[3 : 3+bliss.Bliss.PrivKeyBytesLen()]
+		privKey, _ = bliss.Bliss.PrivKeyFromBytes(privKeyBytes)
+		algType = bliss.BSTypeBliss
 	}
 
-	return &WIF{ecType, privKey, netID}, nil
+	return &WIF{algType, privKey, netID}, nil
 }
 
 // String creates the Wallet Import Format string encoding of a WIF structure.
@@ -116,13 +126,18 @@ func DecodeWIF(wif string) (*WIF, error) {
 // a valid WIF string.
 func (w *WIF) String() string {
 	// Precalculate size.  Maximum number of bytes before base58 encoding
-	// is two bytes for the network, one byte for the ECDSA type, 32 bytes
-	// of private key and finally four bytes of checksum.
-	encodeLen := 2 + 1 + 32 + 4
-
+	// is two bytes for the network, one byte for the Algorithm type
+	var encodeLen int
+	if w.AlgorithmType !=bliss.BSTypeBliss {
+		encodeLen = 2 + 1 + 32 + 4
+	}else{
+		//193 is for bliss v0
+		//385 is for bliss v1
+		encodeLen = 2 + 1 + 385 + 4
+	}
 	a := make([]byte, 0, encodeLen)
 	a = append(a, w.netID[:]...)
-	a = append(a, byte(w.ecType))
+	a = append(a, byte(w.AlgorithmType))
 	a = append(a, w.PrivKey.Serialize()...)
 
 	cksum := chainhash.HashB(a)
@@ -132,26 +147,32 @@ func (w *WIF) String() string {
 
 // SerializePubKey serializes the associated public key of the imported or
 // exported private key in compressed format.  The serialization format
-// chosen depends on the value of w.ecType.
+// chosen depends on the value of w.Algorithm.
 func (w *WIF) SerializePubKey() []byte {
-	pkx, pky := w.PrivKey.Public()
-	var pk chainec.PublicKey
+	if w.AlgorithmType != bliss.BSTypeBliss {
+		pkx, pky := w.PrivKey.Public()
+		var pk chainec.PublicKey
 
-	switch w.ecType {
-	case chainec.ECTypeSecp256k1:
-		pk = chainec.Secp256k1.NewPublicKey(pkx, pky)
-	case chainec.ECTypeEdwards:
-		pk = chainec.Edwards.NewPublicKey(pkx, pky)
-	case chainec.ECTypeSecSchnorr:
-		pk = chainec.SecSchnorr.NewPublicKey(pkx, pky)
+		switch w.AlgorithmType {
+		case chainec.ECTypeSecp256k1:
+			pk = chainec.Secp256k1.NewPublicKey(pkx, pky)
+		case chainec.ECTypeEdwards:
+			pk = chainec.Edwards.NewPublicKey(pkx, pky)
+		case chainec.ECTypeSecSchnorr:
+			pk = chainec.SecSchnorr.NewPublicKey(pkx, pky)
+		}
+		return pk.SerializeCompressed()
+
+	}else{
+		pubk := w.PrivKey.(bliss.PrivateKey).PublicKey()
+		//pk := bliss.Bliss.NewPublicKey(pubk)
+		return pubk.Serialize()
 	}
-
-	return pk.SerializeCompressed()
 }
 
-// DSA returns the ECDSA type for the private key.
+// DSA returns the Algorithm type for the private key.
 func (w *WIF) DSA() int {
-	return w.ecType
+	return w.AlgorithmType
 }
 
 // paddedAppend appends the src byte slice to dst, returning the new slice.

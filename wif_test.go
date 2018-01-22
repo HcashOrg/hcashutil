@@ -8,10 +8,39 @@ package hcashutil_test
 import (
 	"testing"
 
+	/*"github.com/HcashOrg/hcashd/chaincfg"
+	"github.com/HcashOrg/hcashd/chaincfg/chainec"
+	. "github.com/HcashOrg/hcashutil"*/
+	"github.com/HcashOrg/hcashd/crypto/bliss"
+	"crypto/rand"
+	"github.com/HcashOrg/hcashutil"
 	"github.com/HcashOrg/hcashd/chaincfg"
 	"github.com/HcashOrg/hcashd/chaincfg/chainec"
-	. "github.com/HcashOrg/hcashutil"
 )
+func TestBlissWIF(t *testing.T) {
+	sk, _, err := bliss.Bliss.GenerateKey(rand.Reader)
+	if nil!=err {
+		t.Fatal("unexpected error")
+	}
+	//fmt.Println(len(sk.Serialize()))
+
+	//t.Logf("sk: %x\n", sk.Serialize())
+	//t.Logf("sk: %x\n", pk.Serialize())
+
+	wif, err := hcashutil.NewWIF(sk, &chaincfg.MainNetParams, bliss.BSTypeBliss)
+	if nil!=err {
+		t.Fatal("unexpected error, ", err)
+	}
+	//t.Log("wif2: ", wif.String())
+
+	wif2, err := hcashutil.DecodeWIF(wif.String())
+	if nil!=err {
+		t.Fatal("unexpected error, ", err)
+	}
+//	t.Log("wif2: ", wif2.String())
+
+	wif2.SerializePubKey()
+}
 
 func TestEncodeDecodeWIF(t *testing.T) {
 	suites := []int{
